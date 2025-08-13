@@ -19,13 +19,13 @@ RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add
 # Create app directory
 WORKDIR /app
 
-# Copy requirements first
+# Install git for submodule operations
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements first  
 COPY ./apps/pydoll-service/requirements.txt .
 
-# Copy pydoll source for local installation
-COPY ./pydoll /app/pydoll
-
-# Install Python dependencies
+# Install Python dependencies (pydoll will be installed from GitHub)
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code

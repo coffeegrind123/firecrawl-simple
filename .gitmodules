@@ -4,6 +4,3 @@
 [submodule "apps/go-sdk/firecrawl-go-examples"]
 	path = apps/go-sdk/firecrawl-go-examples
 	url = https://github.com/mendableai/firecrawl-go-examples
-[submodule "pydoll"]
-	path = pydoll
-	url = https://github.com/autoscrape-labs/pydoll.git
