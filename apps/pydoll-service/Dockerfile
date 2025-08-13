@@ -23,13 +23,13 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first  
-COPY ./apps/pydoll-service/requirements.txt .
+COPY requirements.txt .
 
 # Install Python dependencies (pydoll will be installed from GitHub)
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
-COPY ./apps/pydoll-service .
+COPY . .
 
 # Expose port
 EXPOSE 3003
