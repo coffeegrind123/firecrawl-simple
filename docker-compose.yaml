@@ -7,7 +7,7 @@ x-common-service: &common-service
   environment:
     - REDIS_URL=${REDIS_URL:-redis://redis:6379}
     - REDIS_RATE_LIMIT_URL=${REDIS_URL:-redis://redis:6379}
-    - PLAYWRIGHT_MICROSERVICE_URL=${PLAYWRIGHT_MICROSERVICE_URL:-http://playwright-service:3000}
+    - PLAYWRIGHT_MICROSERVICE_URL=${PLAYWRIGHT_MICROSERVICE_URL:-http://pydoll-service:3003/scrape}
     - PORT=${PORT:-3002}
     - NUM_WORKERS_PER_QUEUE=${NUM_WORKERS_PER_QUEUE}
     - BULL_AUTH_KEY=${BULL_AUTH_KEY}
@@ -20,17 +20,16 @@ x-common-service: &common-service
     - "host.docker.internal:host-gateway"
 
 services:
-  puppeteer-service:
-    image: trieve/puppeteer-service-ts
+  pydoll-service:
+    image: trieve/pydoll-service
     build:
-      context: ./apps/puppeteer-service-ts/
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./apps/pydoll-service/Dockerfile
     environment:
-      - PORT=3000
+      - PORT=3003
       - PROXY_SERVER=${PROXY_SERVER}
       - PROXY_USERNAME=${PROXY_USERNAME}
       - PROXY_PASSWORD=${PROXY_PASSWORD}
-      - TWOCAPTCHA_TOKEN=${TWOCAPTCHA_TOKEN}
       - MAX_CONCURRENCY=${MAX_CONCURRENCY}
     networks:
       - backend
@@ -40,7 +39,7 @@ services:
     <<: *common-service
     depends_on:
       - redis
-      - puppeteer-service
+      - pydoll-service
     ports:
       - "3002:3002"
     command: ["pnpm", "run", "start:production"]
@@ -49,7 +48,7 @@ services:
     <<: *common-service
     depends_on:
       - redis
-      - puppeteer-service
+      - pydoll-service
       - api
     command: ["pnpm", "run", "workers"]
 

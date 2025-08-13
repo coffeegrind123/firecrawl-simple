@@ -43,16 +43,14 @@ You should add the following services to your docker-compose as follows. We trus
 name: firecrawl
 services:
   # Firecrawl services
-  playwright-service:
-    image: trieve/puppeteer-service-ts:v0.0.6
+  pydoll-service:
+    image: trieve/pydoll-service:latest
     environment:
-      - PORT=3000
+      - PORT=3003
       - PROXY_SERVER=${PROXY_SERVER}
       - PROXY_USERNAME=${PROXY_USERNAME}
       - PROXY_PASSWORD=${PROXY_PASSWORD}
-      - BLOCK_MEDIA=${BLOCK_MEDIA}
       - MAX_CONCURRENCY=${MAX_CONCURRENCY}
-      - TWOCAPTCHA_TOKEN=${TWOCAPTCHA_TOKEN}
     networks:
       - backend
 
@@ -63,7 +61,7 @@ services:
     environment:
       - REDIS_URL=${FIRECRAWL_REDIS_URL:-redis://redis:6379}
       - REDIS_RATE_LIMIT_URL=${FIRECRAWL_REDIS_URL:-redis://redis:6379}
-      - PLAYWRIGHT_MICROSERVICE_URL=${PLAYWRIGHT_MICROSERVICE_URL:-http://playwright-service:3000}
+      - PLAYWRIGHT_MICROSERVICE_URL=${PLAYWRIGHT_MICROSERVICE_URL:-http://pydoll-service:3003/scrape}
       - PORT=${PORT:-3002}
       - NUM_WORKERS_PER_QUEUE=${NUM_WORKERS_PER_QUEUE}
       - BULL_AUTH_KEY=${BULL_AUTH_KEY}
@@ -75,7 +73,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
-      - playwright-service
+      - pydoll-service
     ports:
       - "3002:3002"
     command: ["pnpm", "run", "start:production"]
@@ -87,7 +85,7 @@ services:
     environment:
       - REDIS_URL=${FIRECRAWL_REDIS_URL:-redis://redis:6379}
       - REDIS_RATE_LIMIT_URL=${FIRECRAWL_REDIS_URL:-redis://redis:6379}
-      - PLAYWRIGHT_MICROSERVICE_URL=${PLAYWRIGHT_MICROSERVICE_URL:-http://playwright-service:3000}
+      - PLAYWRIGHT_MICROSERVICE_URL=${PLAYWRIGHT_MICROSERVICE_URL:-http://pydoll-service:3003/scrape}
       - PORT=${PORT:-3002}
       - NUM_WORKERS_PER_QUEUE=${NUM_WORKERS_PER_QUEUE}
       - BULL_AUTH_KEY=${BULL_AUTH_KEY}
@@ -100,7 +98,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
-      - playwright-service
+      - pydoll-service
       - firecrawl-api
     command: ["pnpm", "run", "workers"]
 

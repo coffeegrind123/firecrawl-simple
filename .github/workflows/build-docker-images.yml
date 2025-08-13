@@ -26,8 +26,8 @@ jobs:
           build-args: |
             PORT=8080
 
-  build-puppeteer:
-    name: Build Puppeteer Service
+  build-pydoll:
+    name: Build Pydoll Service
     runs-on: ubuntu-latest
     steps:
       - name: Checkout the repo
@@ -39,10 +39,10 @@ jobs:
       - name: Build Docker image
         uses: docker/build-push-action@v5
         with:
-          context: ./apps/puppeteer-service-ts/
-          file: ./apps/puppeteer-service-ts/Dockerfile
+          context: ./apps/pydoll-service/
+          file: ./apps/pydoll-service/Dockerfile
           push: false
           load: true
-          tags: trieve/puppeteer-service-ts:pr-${{ github.event.number }}
+          tags: trieve/pydoll-service:pr-${{ github.event.number }}
           build-args: |
-            PORT=3000
+            PORT=3003
