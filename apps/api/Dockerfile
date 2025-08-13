@@ -8,7 +8,7 @@ RUN npm install -g pnpm corepack@latest
 RUN corepack enable
 
 # Copy package files
-COPY ./package.json ./pnpm-lock.yaml ./
+COPY ./apps/api/package.json ./apps/api/pnpm-lock.yaml ./
 
 # Install dependencies
 RUN pnpm install --frozen-lockfile
@@ -22,10 +22,10 @@ RUN apt-get update -qq && \
     && update-ca-certificates
 
 # Copy the rest of the application
-COPY . ./
+COPY ./apps/api/ ./
 
-# Build Go module
-COPY ./src/lib/go-html-to-md/ ./src/lib/go-html-to-md/
+# Build Go module (path is now correct after copying)
+# COPY ./src/lib/go-html-to-md/ ./src/lib/go-html-to-md/
 RUN cd src/lib/go-html-to-md && \
     go mod tidy && \
     go build -o html-to-markdown.so -buildmode=c-shared html-to-markdown.go && \
