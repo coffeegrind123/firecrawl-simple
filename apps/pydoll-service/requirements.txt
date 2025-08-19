@@ -3,5 +3,9 @@ fastapi>=0.104.1
 uvicorn[standard]>=0.24.0
 pydantic>=2.0.0
 
+# Virtual display dependencies for Linux containers
+pyvirtualdisplay>=3.0
+python-xlib>=0.33
+
 # Pydoll installed directly from GitHub
 git+https://github.com/autoscrape-labs/pydoll.git

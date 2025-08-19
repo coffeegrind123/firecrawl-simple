@@ -26,7 +26,7 @@ export async function crawlPreviewController(req: Request, res: Response) {
     const team_id = "preview";
 
     if (!success) {
-      return res.status(status).json({ error });
+      return res.status(status || 401).json({ error });
     }
 
     let url = req.body.url;
@@ -115,6 +115,6 @@ export async function crawlPreviewController(req: Request, res: Response) {
     res.json({ jobId: id });
   } catch (error) {
     Logger.error(error);
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
   }
 }

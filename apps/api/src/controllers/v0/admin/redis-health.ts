@@ -4,20 +4,25 @@ import { Logger } from "../../../lib/logger";
 import { redisRateLimitClient } from "../../../services/rate-limiter";
 
 export async function redisHealthController(req: Request, res: Response) {
-  const retryOperation = async (operation, retries = 3) => {
+  const retryOperation = async (operation: () => Promise<any>, retries = 3) => {
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
         return await operation();
       } catch (error) {
         if (attempt === retries) throw error;
-        Logger.warn(`Attempt ${attempt} failed: ${error.message}. Retrying...`);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        Logger.warn(`Attempt ${attempt} failed: ${errorMessage}. Retrying...`);
         await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2 seconds before retrying
       }
     }
   };
 
   try {
-    const queueRedis = new Redis(process.env.REDIS_URL);
+    const redisUrl = process.env.REDIS_URL;
+    if (!redisUrl) {
+      throw new Error('REDIS_URL environment variable is not defined');
+    }
+    const queueRedis = new Redis(redisUrl);
 
     const testKey = "test";
     const testValue = "test";
@@ -68,8 +73,9 @@ export async function redisHealthController(req: Request, res: Response) {
     }
   } catch (error) {
     Logger.error(`Redis health check failed: ${error}`);
+    const errorMessage = error instanceof Error ? error.message : String(error);
     return res
       .status(500)
-      .json({ status: "unhealthy", message: error.message });
+      .json({ status: "unhealthy", message: errorMessage });
   }
 }

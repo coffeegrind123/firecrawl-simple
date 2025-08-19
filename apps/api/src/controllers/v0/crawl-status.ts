@@ -25,7 +25,7 @@ export async function crawlStatusController(req: Request, res: Response) {
       RateLimiterMode.CrawlStatus
     );
     if (!success) {
-      return res.status(status).json({ error });
+      return res.status(status || 401).json({ error });
     }
 
     const sc = await getCrawl(req.params.jobId);
@@ -67,6 +67,6 @@ export async function crawlStatusController(req: Request, res: Response) {
     });
   } catch (error) {
     Logger.error(error);
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
   }
 }

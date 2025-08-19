@@ -5,21 +5,44 @@ Provides the same API interface as the original puppeteer-service-ts.
 """
 
 import asyncio
+import base64
 import json
 import logging
 import os
 import time
 from typing import Dict, Optional
 
+import Xlib.display
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, HttpUrl
-from pydoll.browser import Chrome
+from pydoll.browser.chromium.chrome import Chrome
+from pydoll.browser.options import ChromiumOptions
 from pydoll.exceptions import PageLoadTimeout
+from pyvirtualdisplay import Display
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Initialize virtual display for Linux container environment
+try:
+    display = Xlib.display.Display()
+    screen = display.screen()
+    screen_width = min(screen.width_in_pixels - 150, 1920)
+    screen_height = min(screen.height_in_pixels - 150, 1080)
+except Exception:
+    # Fallback values if X11 display detection fails
+    screen_width = 1920
+    screen_height = 1080
+
+# Start virtual display for screenshot support
+virtual_display = Display(
+    visible=False,  # Set to True for debugging
+    size=(screen_width, screen_height)
+)
+virtual_display.start()
+logger.info(f"Virtual display started with size {screen_width}x{screen_height}")
 
 app = FastAPI(
     title="Pydoll Scraping Service",
@@ -42,39 +65,39 @@ class ScrapeRequest(BaseModel):
     timeout: Optional[int] = 60000
     headers: Optional[Dict[str, str]] = None
     check_selector: Optional[str] = None
+    screenshot: Optional[bool] = False
+    full_page_screenshot: Optional[bool] = False
 
 
 class ScrapeResponse(BaseModel):
     content: str
     pageStatusCode: Optional[int] = None
     pageError: Optional[str] = None
+    screenshot: Optional[str] = None
 
 
-class GlobalBrowserManager:
-    """Singleton browser manager to reuse browser instances."""
+def create_browser():
+    """Create a new browser instance with proper options for containerized environment."""
+    options = ChromiumOptions()
     
-    def __init__(self):
-        self.browser = None
-        self.lock = asyncio.Lock()
+    # Use improved Chrome options for better stability and screenshot support
+    options.add_argument("--headless=new")  # Use new headless mode
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--use-gl=swiftshader")  # Better GPU emulation
+    options.add_argument("--disable-software-rasterizer")
+    options.add_argument("--disable-web-security")
+    options.add_argument("--disable-features=VizDisplayCompositor")
+    options.add_argument(f"--window-size={screen_width}x{screen_height}")
     
-    async def get_browser(self):
-        async with self.lock:
-            if self.browser is None:
-                self.browser = Chrome()
-                await self.browser.start()
-                logger.info("Browser started successfully")
-            return self.browser
+    # Set Chrome binary path explicitly
+    options.binary_location = "/usr/bin/google-chrome"
     
-    async def cleanup(self):
-        async with self.lock:
-            if self.browser:
-                await self.browser.stop()
-                self.browser = None
-                logger.info("Browser stopped")
+    return Chrome(options=options)
 
 
-# Global browser manager instance
-browser_manager = GlobalBrowserManager()
+# Remove the global browser manager line since we deleted the class
 
 
 async def scrape_with_pydoll(
@@ -82,7 +105,9 @@ async def scrape_with_pydoll(
     wait_after_load: int = 0,
     timeout: int = 60000,
     headers: Optional[Dict[str, str]] = None,
-    check_selector: Optional[str] = None
+    check_selector: Optional[str] = None,
+    screenshot: bool = False,
+    full_page_screenshot: bool = False
 ) -> Dict[str, any]:
     """
     Scrape a URL using pydoll browser automation.
@@ -93,17 +118,23 @@ async def scrape_with_pydoll(
         timeout: Maximum time to wait for page load (in milliseconds)
         headers: Optional HTTP headers to set
         check_selector: Optional CSS selector to wait for
+        screenshot: Whether to capture a screenshot
+        full_page_screenshot: Whether to capture a full page screenshot
     
     Returns:
-        Dict containing page content, status code, and any error
+        Dict containing page content, status code, screenshot data, and any error
     """
     start_time = time.time()
     page_status_code = None
     page_error = None
     
+    # Create browser and start it manually (context manager might not be implemented)
+    browser = create_browser()
     try:
-        browser = await browser_manager.get_browser()
-        page = await browser.get_page()
+        await browser.start()
+        # Create a new tab and get the page (correct pydoll API)
+        tab = await browser.new_tab()
+        # The tab object itself should have the page methods
         
         # Set custom headers if provided
         if headers:
@@ -111,12 +142,19 @@ async def scrape_with_pydoll(
             # This would need to be implemented via request interception
             logger.info(f"Custom headers requested: {headers}")
         
-        # Enable network events to capture status codes
-        await page.enable_network_events()
+        # Set browser window bounds for consistent screenshots
+        try:
+            await browser.set_window_bounds({
+                'left': 0,
+                'top': 0,
+                'width': screen_width,
+                'height': screen_height
+            })
+        except Exception as e:
+            logger.warning(f"Failed to set window bounds: {e}")
         
-        # Navigate to the URL with timeout (convert ms to seconds)
-        timeout_seconds = timeout // 1000
-        await page.go_to(str(url), timeout=timeout_seconds)
+        # Navigate to the URL
+        await tab.go_to(str(url))
         
         # Try to get the actual HTTP status code from network events
         # Note: This is a simplified approach - in production you'd want to 
@@ -126,19 +164,49 @@ async def scrape_with_pydoll(
         # Wait additional time if specified (convert ms to seconds)
         if wait_after_load > 0:
             await asyncio.sleep(wait_after_load / 1000)
+        else:
+            # Default wait like in your example
+            await asyncio.sleep(6)
         
         # Wait for specific selector if provided
         if check_selector:
             try:
                 # pydoll uses find_element for CSS selectors
                 from pydoll.constants import By
-                await page.find_element(By.CSS_SELECTOR, check_selector, timeout=10)
+                await tab.find_element(By.CSS_SELECTOR, check_selector, timeout=10)
             except Exception as e:
                 logger.warning(f"Failed to find selector {check_selector}: {e}")
                 # Don't fail the whole request for selector issues
         
         # Get page content
-        page_content = await page.page_source
+        page_content = await tab.page_source
+        
+        # Capture screenshot if requested
+        screenshot_data = None
+        if screenshot or full_page_screenshot:
+            try:
+                # Create a temporary file path for screenshot
+                import tempfile
+                with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
+                    screenshot_path = tmp_file.name
+                
+                # Use pydoll's correct screenshot method
+                await tab.take_screenshot(path=screenshot_path)
+                
+                # Read the screenshot file and convert to base64
+                with open(screenshot_path, 'rb') as img_file:
+                    screenshot_bytes = img_file.read()
+                    screenshot_data = base64.b64encode(screenshot_bytes).decode('utf-8')
+                
+                # Clean up the temporary file
+                os.unlink(screenshot_path)
+                
+                logger.info(f"Screenshot captured for {url}")
+                
+            except Exception as screenshot_error:
+                logger.warning(f"Failed to capture screenshot for {url}: {screenshot_error}")
+                # Don't fail the whole request for screenshot issues
+                screenshot_data = None
         
         elapsed_time = time.time() - start_time
         logger.info(f"Successfully scraped {url} in {elapsed_time:.2f}s")
@@ -146,7 +214,8 @@ async def scrape_with_pydoll(
         return {
             "content": page_content,
             "pageStatusCode": page_status_code,
-            "pageError": page_error
+            "pageError": page_error,
+            "screenshot": screenshot_data
         }
         
     except PageLoadTimeout:
@@ -155,7 +224,8 @@ async def scrape_with_pydoll(
         return {
             "content": "",
             "pageStatusCode": None,
-            "pageError": page_error
+            "pageError": page_error,
+            "screenshot": None
         }
     except Exception as e:
         page_error = str(e)
@@ -163,8 +233,15 @@ async def scrape_with_pydoll(
         return {
             "content": "",
             "pageStatusCode": None,
-            "pageError": page_error
+            "pageError": page_error,
+            "screenshot": None
         }
+    finally:
+        # Clean up browser
+        try:
+            await browser.stop()
+        except Exception as e:
+            logger.warning(f"Error stopping browser: {e}")
 
 
 @app.post("/scrape", response_model=ScrapeResponse)
@@ -178,7 +255,9 @@ async def scrape_endpoint(request: ScrapeRequest):
             wait_after_load=request.wait_after_load or 0,
             timeout=request.timeout or 60000,
             headers=request.headers,
-            check_selector=request.check_selector
+            check_selector=request.check_selector,
+            screenshot=request.screenshot or False,
+            full_page_screenshot=request.full_page_screenshot or False
         )
         
         return ScrapeResponse(**result)
@@ -203,9 +282,13 @@ async def startup_event():
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    """Cleanup browser on shutdown."""
+    """Cleanup virtual display on shutdown."""
     logger.info("Shutting down pydoll scraping service...")
-    await browser_manager.cleanup()
+    try:
+        virtual_display.stop()
+        logger.info("Virtual display stopped")
+    except Exception as e:
+        logger.warning(f"Error stopping virtual display: {e}")
 
 
 if __name__ == "__main__":

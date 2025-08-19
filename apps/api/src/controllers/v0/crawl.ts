@@ -31,7 +31,7 @@ export async function crawlController(req: Request, res: Response) {
       RateLimiterMode.Crawl
     );
     if (!success) {
-      return res.status(status).json({ error });
+      return res.status(status || 401).json({ error });
     }
 
     if (req.headers["x-idempotency-key"]) {
@@ -39,7 +39,7 @@ export async function crawlController(req: Request, res: Response) {
         createIdempotencyKey(req);
       } catch (error) {
         Logger.error(error);
-        return res.status(500).json({ error: error.message });
+        return res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
       }
     }
 
@@ -54,7 +54,7 @@ export async function crawlController(req: Request, res: Response) {
         try {
           new RegExp(x);
         } catch (e) {
-          return res.status(400).json({ error: e.message });
+          return res.status(400).json({ error: e instanceof Error ? e.message : String(e) });
         }
       }
     }
@@ -64,7 +64,7 @@ export async function crawlController(req: Request, res: Response) {
         try {
           new RegExp(x);
         } catch (e) {
-          return res.status(400).json({ error: e.message });
+          return res.status(400).json({ error: e instanceof Error ? e.message : String(e) });
         }
       }
     }
@@ -79,9 +79,10 @@ export async function crawlController(req: Request, res: Response) {
     try {
       url = checkAndUpdateURL(url).url;
     } catch (e) {
+      const errorMessage = e instanceof Error ? e.message : String(e);
       return res
         .status(e instanceof Error && e.message === "Invalid URL" ? 400 : 500)
-        .json({ error: e.message ?? e });
+        .json({ error: errorMessage });
     }
 
     const id = uuidv4();
@@ -175,6 +176,6 @@ export async function crawlController(req: Request, res: Response) {
     res.json({ jobId: id });
   } catch (error) {
     Logger.error(error);
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
   }
 }

@@ -15,7 +15,9 @@ export async function scrapeWithPlaywright(
   url: string,
   waitFor: number = 0,
   headers?: Record<string, string>,
-): Promise<{ content: string; pageStatusCode?: number; pageError?: string }> {
+  screenshot?: boolean,
+  fullPageScreenshot?: boolean
+): Promise<{ content: string; pageStatusCode?: number; pageError?: string; screenshot?: string }> {
   const logParams = {
     url,
     scraper: "playwright",
@@ -37,6 +39,8 @@ export async function scrapeWithPlaywright(
         url: url,
         wait_after_load: waitParam,
         headers: headers,
+        screenshot: screenshot || false,
+        full_page_screenshot: fullPageScreenshot || false,
       },
       {
         headers: {
@@ -57,6 +61,7 @@ export async function scrapeWithPlaywright(
         content: "",
         pageStatusCode: response.data?.pageStatusCode,
         pageError: response.data?.pageError,
+        screenshot: undefined,
       };
     }
 
@@ -72,6 +77,7 @@ export async function scrapeWithPlaywright(
         content: html ?? "",
         pageStatusCode: data.pageStatusCode,
         pageError: data.pageError,
+        screenshot: data.screenshot,
       };
     } catch (jsonError) {
       logParams.error_message = jsonError.message || jsonError;
@@ -82,6 +88,7 @@ export async function scrapeWithPlaywright(
         content: "",
         pageStatusCode: null,
         pageError: logParams.error_message,
+        screenshot: undefined,
       };
     }
   } catch (error) {
@@ -98,6 +105,7 @@ export async function scrapeWithPlaywright(
       content: "",
       pageStatusCode: null,
       pageError: logParams.error_message,
+      screenshot: undefined,
     };
   } finally {
     const endTime = Date.now();

@@ -1,12 +1,15 @@
 FROM python:3.11-slim
 
-# Install system dependencies for Chrome and pydoll
+# Install system dependencies for Chrome, pydoll, and virtual display
 RUN apt-get update && apt-get install -y \
     wget \
     gnupg \
     unzip \
     curl \
     xvfb \
+    x11-utils \
+    xauth \
+    python3-tk \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Google Chrome
@@ -30,6 +33,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY . .
+
+# Create screenshots directory
+RUN mkdir -p /app/screenshots && chmod 755 /app/screenshots
 
 # Expose port
 EXPOSE 3003

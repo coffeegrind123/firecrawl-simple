@@ -117,7 +117,7 @@ export async function scrapeController(req: Request, res: Response) {
       RateLimiterMode.Scrape
     );
     if (!success) {
-      return res.status(status).json({ error });
+      return res.status(status || 401).json({ error });
     }
 
     const crawlerOptions = req.body.crawlerOptions ?? {};

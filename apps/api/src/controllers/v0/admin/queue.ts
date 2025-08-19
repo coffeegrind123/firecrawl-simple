@@ -30,7 +30,7 @@ export async function cleanBefore24hCompleteJobsController(
     ).flat();
     const before24hJobs =
       completedJobs.filter(
-        (job) => job.finishedOn < Date.now() - 24 * 60 * 60 * 1000
+        (job) => job.finishedOn && job.finishedOn < Date.now() - 24 * 60 * 60 * 1000
       ) || [];
 
     let count = 0;
@@ -81,6 +81,6 @@ export async function queuesController(req: Request, res: Response) {
     });
   } catch (error) {
     Logger.error(error);
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
   }
 }

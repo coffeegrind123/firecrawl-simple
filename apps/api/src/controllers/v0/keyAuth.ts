@@ -13,12 +13,12 @@ export const keyAuthController = async (req: Request, res: Response) => {
       res
     );
     if (!success) {
-      return res.status(status).json({ error });
+      return res.status(status || 401).json({ error });
     }
     // if success, return success: true
     return res.status(200).json({ success: true });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
   }
 };
 

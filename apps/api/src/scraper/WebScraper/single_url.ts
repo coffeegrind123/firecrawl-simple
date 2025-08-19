@@ -163,9 +163,12 @@ export async function scrapeSingleUrl(
           const response = await scrapeWithPlaywright(
             url,
             pageOptions.waitFor,
-            pageOptions.headers
+            pageOptions.headers,
+            pageOptions.screenshot,
+            pageOptions.fullPageScreenshot
           );
           scraperResponse.text = response.content;
+          scraperResponse.screenshot = response.screenshot || "";
           scraperResponse.metadata.pageStatusCode = response.pageStatusCode;
           scraperResponse.metadata.pageError = response.pageError;
         }

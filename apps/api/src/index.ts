@@ -104,7 +104,7 @@ if (cluster.isPrimary) {
       });
     } catch (error) {
       Logger.error(error);
-      return res.status(500).json({ error: error.message });
+      return res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
     }
   });
 

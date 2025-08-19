@@ -26,7 +26,7 @@ export function authMiddleware(
 
       if (!success) {
         if (!res.headersSent) {
-          return res.status(status).json({ success: false, error });
+          return res.status(status || 401).json({ success: false, error });
         }
       }
 

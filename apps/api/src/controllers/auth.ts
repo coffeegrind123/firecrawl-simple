@@ -1,3 +1,4 @@
+import { Request, Response } from "express";
 import { parseApi } from "../lib/parseApi";
 import { getRateLimiter } from "../services/rate-limiter";
 import { AuthResponse, PlanType, RateLimiterMode } from "../types";
@@ -12,8 +13,8 @@ function normalizedApiIsUuid(potentialUuid: string): boolean {
   return validate(potentialUuid);
 }
 export async function authenticateUser(
-  req,
-  res,
+  req: Request,
+  res: Response,
   mode?: RateLimiterMode
 ): Promise<AuthResponse> {
   return withAuth(supaAuthenticateUser)(req, res, mode);
@@ -21,14 +22,14 @@ export async function authenticateUser(
 function setTrace(team_id: string, api_key: string) {
   try {
     console.log("Setting trace attributes");
-  } catch (error) {
+  } catch (error: any) {
     Logger.error(`Error setting trace attributes: ${error.message}`);
   }
 }
 
 export async function supaAuthenticateUser(
-  req,
-  res,
+  req: Request,
+  res: Response,
   mode?: RateLimiterMode
 ): Promise<{
   success: boolean;
@@ -85,41 +86,43 @@ export async function supaAuthenticateUser(
 
     cacheKey = `api_key:${normalizedApi}`;
 
-    const plan = getPlanByPriceId(priceId);
+    const plan = priceId ? getPlanByPriceId(priceId) : null;
     // HyperDX Logging
-    setTrace(teamId, normalizedApi);
-    subscriptionData = {
-      team_id: teamId,
-      plan: plan,
-    };
+    if (teamId) {
+      setTrace(teamId, normalizedApi);
+      subscriptionData = {
+        team_id: teamId,
+        plan: plan || "",
+      };
+    }
     switch (mode) {
       case RateLimiterMode.Crawl:
         rateLimiter = getRateLimiter(
           RateLimiterMode.Crawl,
           token,
-          subscriptionData.plan
+          subscriptionData?.plan || ""
         );
         break;
       case RateLimiterMode.Scrape:
         rateLimiter = getRateLimiter(
           RateLimiterMode.Scrape,
           token,
-          subscriptionData.plan,
-          teamId
+          subscriptionData?.plan || "",
+          teamId || undefined
         );
         break;
       case RateLimiterMode.Search:
         rateLimiter = getRateLimiter(
           RateLimiterMode.Search,
           token,
-          subscriptionData.plan
+          subscriptionData?.plan || ""
         );
         break;
       case RateLimiterMode.Map:
         rateLimiter = getRateLimiter(
           RateLimiterMode.Map,
           token,
-          subscriptionData.plan
+          subscriptionData?.plan || ""
         );
         break;
       case RateLimiterMode.CrawlStatus:
@@ -139,11 +142,11 @@ export async function supaAuthenticateUser(
   }
 
   const team_endpoint_token =
-    token === "this_is_just_a_preview_token" ? iptoken : teamId;
+    token === "this_is_just_a_preview_token" ? (iptoken || "default") : (teamId || "default");
 
   try {
     await rateLimiter.consume(team_endpoint_token);
-  } catch (rateLimiterRes) {
+  } catch (rateLimiterRes: any) {
     Logger.error(`Rate limit exceeded: ${rateLimiterRes}`);
     const secs = Math.round(rateLimiterRes.msBeforeNext / 1000) || 1;
     const retryDate = new Date(Date.now() + rateLimiterRes.msBeforeNext);
@@ -194,8 +197,8 @@ export async function supaAuthenticateUser(
 
   return {
     success: true,
-    team_id: subscriptionData.team_id,
-    plan: (subscriptionData.plan ?? "") as PlanType,
+    team_id: subscriptionData?.team_id || "",
+    plan: (subscriptionData?.plan ?? "") as PlanType,
   };
 }
 function getPlanByPriceId(price_id: string): PlanType {
