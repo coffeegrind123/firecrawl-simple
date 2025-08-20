@@ -34,6 +34,10 @@ export async function crawlController(req: Request, res: Response) {
       return res.status(status || 401).json({ error });
     }
 
+    if (!team_id) {
+      return res.status(401).json({ error: "Team ID is required" });
+    }
+
     if (req.headers["x-idempotency-key"]) {
       try {
         createIdempotencyKey(req);

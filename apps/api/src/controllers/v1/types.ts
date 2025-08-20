@@ -198,6 +198,39 @@ export type MapResponse =
       scrape_id?: string;
     };
 
+export const searchRequestSchema = z
+  .object({
+    query: z.string().min(1, "Query is required"),
+    region: z.string().default("us-en"),
+    safesearch: z.enum(["on", "moderate", "off"]).default("moderate"),
+    timelimit: z.enum(["d", "w", "m", "y"]).optional(),
+    maxResults: z.number().int().min(1).max(50).default(8),
+    page: z.number().int().min(1).default(1),
+    scrapeOptions: scrapeOptions.optional(),
+    origin: z.string().optional().default("api"),
+  })
+  .strict(strictMessage);
+
+export type SearchRequest = z.infer<typeof searchRequestSchema>;
+
+export type SearchResult = {
+  title: string;
+  href: string;
+  body: string;
+  snippet: string;
+};
+
+export type SearchResponse =
+  | ErrorResponse
+  | {
+      success: true;
+      query: string;
+      results: SearchResult[];
+      page: number;
+      total: number;
+      search_id?: string;
+    };
+
 export type CrawlStatusParams = {
   jobId: string;
 };

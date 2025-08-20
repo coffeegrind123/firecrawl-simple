@@ -208,6 +208,39 @@ async def scrape_with_pydoll(
                 # Don't fail the whole request for screenshot issues
                 screenshot_data = None
         
+        # Capture screenshot if requested
+        screenshot_data = None
+        if screenshot or full_page_screenshot:
+            try:
+                # Import the page commands for screenshot functionality
+                from pydoll.commands import PageCommands
+                
+                # Configure screenshot options
+                screenshot_options = {
+                    'format': 'png',
+                    'capture_beyond_viewport': full_page_screenshot
+                }
+                
+                # Capture the screenshot
+                screenshot_result = await PageCommands.capture_screenshot(
+                    page.connection, **screenshot_options
+                )
+                
+                # The screenshot result should contain base64 encoded image data
+                if hasattr(screenshot_result, 'data'):
+                    screenshot_data = screenshot_result.data
+                elif isinstance(screenshot_result, dict) and 'data' in screenshot_result:
+                    screenshot_data = screenshot_result['data']
+                else:
+                    screenshot_data = str(screenshot_result)
+                    
+                logger.info(f"Screenshot captured for {url}")
+                
+            except Exception as screenshot_error:
+                logger.warning(f"Failed to capture screenshot for {url}: {screenshot_error}")
+                # Don't fail the whole request for screenshot issues
+                screenshot_data = None
+        
         elapsed_time = time.time() - start_time
         logger.info(f"Successfully scraped {url} in {elapsed_time:.2f}s")
         
