@@ -1,6 +1,8 @@
 import { Response } from "express";
 import { RequestWithAuth } from "./types";
 import axios from "axios";
+import { scrapeSingleUrl } from "../../scraper/WebScraper/single_url";
+import { PageOptions } from "../../lib/entities";
 
 export interface SimpleSearchRequest {
   query: string;
@@ -68,8 +70,8 @@ export async function simpleSearchController(
       }
     );
 
-    // Parse the HTML response to extract search results
-    const results = parseSearchResults(searchResponse.data, maxResults);
+    // Use firecrawl-simple's existing scraping infrastructure to parse the search results
+    const results = await parseSearchResultsWithFirecrawl(searchResponse.data, maxResults);
     
     console.log(`[Search] Found ${results.length} results for "${query}"`);
 
@@ -92,9 +94,10 @@ export async function simpleSearchController(
 }
 
 /**
- * Parse DuckDuckGo HTML response to extract search results
+ * Parse DuckDuckGo HTML response using firecrawl-simple's existing scraping infrastructure
+ * This leverages the same parsing, cleaning, and extraction that firecrawl-simple uses for all websites
  */
-function parseSearchResults(html: string, maxResults: number) {
+async function parseSearchResultsWithFirecrawl(html: string, maxResults: number) {
   const results: Array<{
     title: string;
     href: string;
@@ -103,37 +106,68 @@ function parseSearchResults(html: string, maxResults: number) {
   }> = [];
 
   try {
-    // Simple regex-based parsing of DuckDuckGo results
-    // Look for result links and snippets
-    const resultPattern = /<a[^>]+class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>([^<]+)<\/a>/gi;
-    const snippetPattern = /<a[^>]+class="[^"]*result__snippet[^"]*"[^>]*>([^<]+)<\/a>/gi;
+    // Use firecrawl-simple's scraping with the DuckDuckGo HTML content
+    const pageOptions: PageOptions = {
+      includeMarkdown: true,
+      includeRawHtml: false,
+      includeExtract: false,
+      waitFor: undefined,
+      screenshot: false,
+      fullPageScreenshot: false
+    };
+
+    // Let firecrawl-simple parse and clean the HTML
+    const document = await scrapeSingleUrl(
+      "https://html.duckduckgo.com/html/", // Fake URL for context
+      pageOptions,
+      html // Pass our HTML content directly
+    );
+
+    console.log(`[Search Parser] Firecrawl extracted content length: ${document.markdown?.length || 0}`);
+
+    // Now extract search results from the cleaned markdown/content
+    // Parse the markdown to find search result patterns
+    const markdown = document.markdown || "";
+    const lines = markdown.split('\n');
     
-    let match;
-    let index = 0;
+    let currentResult: any = null;
     
-    // Extract links and titles
-    while ((match = resultPattern.exec(html)) !== null && index < maxResults) {
-      const href = match[1].startsWith('/') ? `https://duckduckgo.com${match[1]}` : match[1];
-      const title = match[2].replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+    for (const line of lines) {
+      const trimmedLine = line.trim();
       
-      // Find corresponding snippet
-      let snippet = '';
-      const snippetMatch = snippetPattern.exec(html);
-      if (snippetMatch) {
-        snippet = snippetMatch[1].replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+      // Look for result titles (usually links)
+      const linkMatch = trimmedLine.match(/^\[([^\]]+)\]\((https?:\/\/[^)]+)\)$/);
+      if (linkMatch && results.length < maxResults) {
+        // Save previous result if exists
+        if (currentResult && currentResult.title && currentResult.href) {
+          results.push(currentResult);
+        }
+        
+        // Start new result
+        currentResult = {
+          title: linkMatch[1],
+          href: linkMatch[2],
+          body: '',
+          snippet: ''
+        };
       }
-      
-      results.push({
-        title,
-        href,
-        body: snippet,
-        snippet
-      });
-      
-      index++;
+      // Look for snippet text (non-link lines with content)
+      else if (trimmedLine && !trimmedLine.startsWith('[') && !trimmedLine.startsWith('#') && currentResult) {
+        if (!currentResult.snippet) {
+          currentResult.snippet = trimmedLine;
+          currentResult.body = trimmedLine;
+        }
+      }
     }
+    
+    // Add the last result
+    if (currentResult && currentResult.title && currentResult.href && results.length < maxResults) {
+      results.push(currentResult);
+    }
+    
+    console.log(`[Search Parser] Extracted ${results.length} search results using firecrawl parsing`);
   } catch (error) {
-    console.error("Error parsing search results:", error);
+    console.error("Error parsing search results with firecrawl:", error);
   }
 
   return results;
