@@ -11,7 +11,7 @@ import { crawlCancelController } from "../controllers/v1/crawl-cancel";
 import { scrapeStatusController } from "../controllers/v1/scrape-status";
 import { livenessController } from "../controllers/v1/liveness";
 import { readinessController } from "../controllers/v1/readiness";
-import { searchController } from "../controllers/v1/search";
+import { simpleSearchController } from "../controllers/v1/search-simple";
 import expressWs from "express-ws";
 
 export function authMiddleware(
@@ -77,7 +77,7 @@ v1Router.post(
 
 v1Router.post("/map", authMiddleware(RateLimiterMode.Map), wrap(mapController));
 
-v1Router.post("/search", authMiddleware(RateLimiterMode.Scrape), wrap(searchController));
+v1Router.post("/search", authMiddleware(RateLimiterMode.Scrape), wrap(simpleSearchController));
 
 v1Router.get(
   "/crawl/:jobId",
