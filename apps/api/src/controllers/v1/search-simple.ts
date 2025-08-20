@@ -1,6 +1,5 @@
 import { Response } from "express";
 import { RequestWithAuth } from "./types";
-import axios from "axios";
 import { scrapeSingleUrl } from "../../scraper/WebScraper/single_url";
 import { PageOptions } from "../../lib/entities";
 
@@ -28,8 +27,8 @@ export interface SimpleSearchResponse {
 }
 
 /**
- * Simple search endpoint using DuckDuckGo HTML search
- * Uses the same approach as the curl command - POST to DuckDuckGo then parse HTML
+ * Simple search endpoint using firecrawl-simple's normal scraping approach
+ * Scrapes DuckDuckGo search results using the same method as any other website
  */
 export async function simpleSearchController(
   req: RequestWithAuth<{}, SimpleSearchResponse, SimpleSearchRequest>,
@@ -48,30 +47,26 @@ export async function simpleSearchController(
 
     console.log(`[Search] Searching DuckDuckGo for: "${query}"`);
 
-    // Use DuckDuckGo HTML search - same as your curl command
-    const searchResponse = await axios.post('https://html.duckduckgo.com/html/', 
-      `q=${encodeURIComponent(query)}&b=`, 
-      {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.5',
-          'Accept-Encoding': 'gzip, deflate, br',
-          'Referer': 'https://html.duckduckgo.com/',
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Origin': 'https://html.duckduckgo.com',
-          'Connection': 'keep-alive',
-          'Sec-Fetch-Dest': 'document',
-          'Sec-Fetch-Mode': 'navigate',
-          'Sec-Fetch-Site': 'same-origin',
-          'Sec-Fetch-User': '?1'
-        },
-        timeout: 10000
-      }
-    );
+    // Build DuckDuckGo search URL with query parameters
+    const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
 
-    // Use firecrawl-simple's existing scraping infrastructure to parse the search results
-    const results = await parseSearchResultsWithFirecrawl(searchResponse.data, maxResults);
+    // Use firecrawl-simple's normal scraping approach to get search results
+    const pageOptions: PageOptions = {
+      includeMarkdown: true,
+      includeRawHtml: false,
+      includeExtract: false,
+      waitFor: 2000, // Wait for page to load
+      screenshot: false,
+      fullPageScreenshot: false
+    };
+
+    // Scrape the DuckDuckGo search page using firecrawl-simple's standard approach
+    const document = await scrapeSingleUrl(searchUrl, pageOptions);
+    
+    console.log(`[Search] Scraped DuckDuckGo page, content length: ${document.markdown?.length || 0}`);
+
+    // Extract search results from the scraped content
+    const results = extractSearchResults(document.markdown || "", maxResults);
     
     console.log(`[Search] Found ${results.length} results for "${query}"`);
 
@@ -94,10 +89,10 @@ export async function simpleSearchController(
 }
 
 /**
- * Parse DuckDuckGo HTML response using firecrawl-simple's existing scraping infrastructure
- * This leverages the same parsing, cleaning, and extraction that firecrawl-simple uses for all websites
+ * Extract search results from DuckDuckGo markdown content
+ * Parses the cleaned markdown that firecrawl-simple generated from the search page
  */
-async function parseSearchResultsWithFirecrawl(html: string, maxResults: number) {
+function extractSearchResults(markdown: string, maxResults: number) {
   const results: Array<{
     title: string;
     href: string;
@@ -106,36 +101,13 @@ async function parseSearchResultsWithFirecrawl(html: string, maxResults: number)
   }> = [];
 
   try {
-    // Use firecrawl-simple's scraping with the DuckDuckGo HTML content
-    const pageOptions: PageOptions = {
-      includeMarkdown: true,
-      includeRawHtml: false,
-      includeExtract: false,
-      waitFor: undefined,
-      screenshot: false,
-      fullPageScreenshot: false
-    };
-
-    // Let firecrawl-simple parse and clean the HTML
-    const document = await scrapeSingleUrl(
-      "https://html.duckduckgo.com/html/", // Fake URL for context
-      pageOptions,
-      html // Pass our HTML content directly
-    );
-
-    console.log(`[Search Parser] Firecrawl extracted content length: ${document.markdown?.length || 0}`);
-
-    // Now extract search results from the cleaned markdown/content
-    // Parse the markdown to find search result patterns
-    const markdown = document.markdown || "";
     const lines = markdown.split('\n');
-    
     let currentResult: any = null;
     
     for (const line of lines) {
       const trimmedLine = line.trim();
       
-      // Look for result titles (usually links)
+      // Look for result titles (markdown links)
       const linkMatch = trimmedLine.match(/^\[([^\]]+)\]\((https?:\/\/[^)]+)\)$/);
       if (linkMatch && results.length < maxResults) {
         // Save previous result if exists
@@ -151,9 +123,9 @@ async function parseSearchResultsWithFirecrawl(html: string, maxResults: number)
           snippet: ''
         };
       }
-      // Look for snippet text (non-link lines with content)
+      // Look for snippet text (content lines)
       else if (trimmedLine && !trimmedLine.startsWith('[') && !trimmedLine.startsWith('#') && currentResult) {
-        if (!currentResult.snippet) {
+        if (!currentResult.snippet && trimmedLine.length > 10) {
           currentResult.snippet = trimmedLine;
           currentResult.body = trimmedLine;
         }
@@ -165,9 +137,9 @@ async function parseSearchResultsWithFirecrawl(html: string, maxResults: number)
       results.push(currentResult);
     }
     
-    console.log(`[Search Parser] Extracted ${results.length} search results using firecrawl parsing`);
+    console.log(`[Search Parser] Extracted ${results.length} search results from markdown`);
   } catch (error) {
-    console.error("Error parsing search results with firecrawl:", error);
+    console.error("Error extracting search results:", error);
   }
 
   return results;
